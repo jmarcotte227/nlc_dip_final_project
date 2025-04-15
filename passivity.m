@@ -16,6 +16,9 @@ F = [0 -a12*sin(x2-x1);
 C=[1 -1;0 1];
 u = [u1;u2];
 
+% D = 2*eye(2);
+D = zeros(2);
+
 
 y = [x1;x2];
 
@@ -25,14 +28,19 @@ u'*y;
 % g = inv(A)*C*u
 
 % define a storage function
-f = inv(A)*(C*u-F*[x3^2;x4^2]-B*[sin(x1);sin(x2)]);
+f = inv(A)*(C*u-F*[x3^2;x4^2]-B*[sin(x1);sin(x2)]-D*[x3;x4]);
 
 % energy of the system
 V = 0.5*a11*x3^2+a12*x3*x4*cos(x1-x2)+0.5*a22*x4^2+b1*cos(x1)+b2*cos(x2);
 % dot_V = a11*x3*f(1)+a12*(f(1)*x4*cos(x1-x2)-2*x3*x4*sin(x1-x2)+f(2)*x3*cos(x1-x2))+a22*x4*f(2)-b1*sin(x1)*x3-b2*sin(x2)*x4;
+dot_T = a11*x3*f(1)+a12*(f(1)*x4*cos(x1-x2)-x3^2*x4*sin(x1-x2)+x3*x4^2*sin(x1-x2)+f(2)*x3*cos(x1-x2))+a22*x4*f(2)
+
+dot_V = dot_T+x1*x3+x2*x4;
 
 
-dot_V = a11*x3*f(1)+a12*(f(1)*x4*cos(x1-x2)-x3^2*x4*sin(x1-x2)+x3*x4^2*sin(x1-x2)+f(2)*x3*cos(x1-x2))+a22*x4*f(2)-b1*sin(x1)*x3-b2*sin(x2)*x4;
+syms v1 v2
+dot_A = [ 0, -a12*sin(x2-x1)*(x4-x3);-a12*sin(x2-x1)*(x4-x3), 0];
+dot_V = [x3,x4]*[v1;v2]-[x3,x4]*F*[x3^2;x4^2]+0.5*[x3,x4]*dot_A*[x3;x4]
 
 
 % simplified energy
@@ -40,7 +48,7 @@ dot_V = a11*x3*f(1)+a12*(f(1)*x4*cos(x1-x2)-x3^2*x4*sin(x1-x2)+x3*x4^2*sin(x1-x2
 % dot_V = a11*x3*f(1)+a22*x4*f(2);
 % 
 disp("Before Controller")
-pretty(collect(simplify(dot_V), [u1,u2]))
+pretty(simplify(dot_V))
 
 % Substitute controller into function
 % u1=x4*2*a12*sin(x1-x2)-k1*x3
