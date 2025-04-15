@@ -8,7 +8,7 @@ a22=I2;
 b1=(m1*r1+m2*l1)*g;
 b2=m2*r2*g;
 
-[t,y] = ode45(@(t,x) odefun(t,x,a11,a12,a22,b1,b2), [0, 10], [pi; pi; 0; 0]);
+[t,y] = ode45(@(t,x) odefun(t,x,a11,a12,a22,b1,b2), [0, 100], [0; 0; 0; 0]);
 plot(t,y(:,1:2))
 
 function dxdt=odefun(t,x,a11,a12,a22,b1,b2)
@@ -23,9 +23,14 @@ B=[-b1, 0; 0, -b2];
 
 C=[1, 0; -1, 1];
 
-M=[1; 0];
+M=[0; 0];
 
-rhs = C*M - F*[x(3)^2; x(4)^2] - B*[sin(x(1)); sin(x(2))];
-accel = A\rhs;
+
+% rhs = C*M - F*[x(3)^2; x(4)^2] - B*[sin(x(1)); sin(x(2))];
+% accel = inv(A)*rhs;
+% with damping
+D = 0.1*eye(2); % must be positive semi-definite
+rhs = C*M - F*[x(3)^2; x(4)^2] - B*[sin(x(1)); sin(x(2))]-D*[x(3);x(4)];
+accel = inv(A)*rhs;
 dxdt = [x(3); x(4); accel(1); accel(2)];
 end
