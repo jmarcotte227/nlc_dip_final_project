@@ -47,8 +47,30 @@ dot_V = [x3,x4]*[v1;v2]-[x3,x4]*F*[x3^2;x4^2]+0.5*[x3,x4]*dot_A*[x3;x4]
 % V = 0.5*a11*x3^2+0.5*a22*x4^2;
 % dot_V = a11*x3*f(1)+a22*x4*f(2);
 % 
-disp("Before Controller")
+disp("Two joing control")
 pretty(simplify(dot_V))
+disp("------------------")
+
+
+
+
+%% uncertainty analysis
+syms m1 m2 l1 l2 r1 r2 g I1 I2 ddt1 ddt2;
+a11 = 1/3*m1*l1^2 + m2*l1^2;
+a12 = m2*r2*l1;
+b1 = (m1*r1+m2*l1)*g;
+b2 = m2*r2*g;
+a22 =1/3*m2*l2^2; 
+ddt = inv(A)*(C*u-F*[x3^2;x4^2]-B*[sin(x1);sin(x2)]-D*[x3;x4]);
+% unc_dynamics = subs((A*[ddt1;ddt2]+F*[x3^2;x4^2]+B*[sin(x1);sin(x2)]));
+
+unc_dynamics = subs(ddt);
+% linear parameterization of the dynamics wrt mass
+disp("Linear parameterization")
+pretty(collect(simplify(unc_dynamics),[m1 m2]))
+
+
+%% junk
 
 % Substitute controller into function
 % u1=x4*2*a12*sin(x1-x2)-k1*x3
