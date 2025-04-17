@@ -17,10 +17,7 @@ legend('u_1', 'u_2')
 function dxdt=odefun(t,x)
     [A, F, B, C] = matrices(x);
     U = control_outer(x, A, F, B, C);
-
-    rhs = C*U - F*[x(3)^2; x(4)^2] - B*[sin(x(1)); sin(x(2))];
-    accel = A\rhs;
-    dxdt = [x(3); x(4); accel(1); accel(2)];
+    dxdt = [x(3); x(4); A\(C*U - F*x(3:4).^2 - B*sin(x(1:2)))];
 end
 
 % Additionally save the input
@@ -46,36 +43,46 @@ end
 
 % Decoupled second order system
 function V=control_inner(x)
-    zeta1=1;
-    omega1=1;
-    zeta2=1;
-    omega2=1;
+    persistent K % declare as static variable
+    if isempty(K)
+        % Pole placement
+        zeta1=0.9;
+        omega1=0.8;
+        zeta2=0.9;
+        omega2=1.2;
+
+        k1=omega1^2;
+        k2=omega2^2;
+        k3=2*zeta1*omega1;
+        k4=2*zeta2*omega2;
+        
+        K = [k1, 0, k3, 0;
+             0, k2, 0, k4];
+    end
     
-    k11=omega1^2;
-    k21=2*zeta1*omega1;
-    k12=omega2^2;
-    k22=2*zeta2*omega2;
-    
-    V = [-k11*x(1)-k21*x(3); -k12*x(2)-k22*x(4)];
+    V = -K*x;
 end
 
 % Wrap the inner controller
 function U=control_outer(x, A, F, B, C)
-    U=C\A*(control_inner(x) + A\(F*[x(3)^2; x(4)^2]+B*[sin(x(1)); sin(x(2))]));
+    U=C\A*(control_inner(x) + A\(F*x(3:4).^2+B*sin(x(1:2))));
 end
 
 % Calculate matrices
 function [A, F, B, C] = matrices(x)
-    % Model parameters
-    m1=1; r1=0.5; l1=1; I1=1/3*m1*l1^2;
-    m2=1; r2=0.5; l2=1; I2=1/3*m2*l2^2;
-    g = 9.81;
-    
-    a11=I1+m2*l1^2;
-    a12=m2*r2*l1;
-    a22=I2;
-    b1=(m1*r1+m2*l1)*g;
-    b2=m2*r2*g;
+    persistent m1 r1 l1 I1 m2 r2 l2 I2 g a11 a12 a22 b1 b2
+    if isempty(g)
+        % Model parameters
+        m1=1; r1=0.5; l1=1; I1=1/3*m1*l1^2;
+        m2=1; r2=0.5; l2=1; I2=1/3*m2*l2^2;
+        g = 9.81;
+        
+        a11=I1+m2*l1^2;
+        a12=m2*r2*l1;
+        a22=I2;
+        b1=(m1*r1+m2*l1)*g;
+        b2=m2*r2*g;
+    end
 
     A=[a11, a12*cos(x(2)-x(1));
        a12*cos(x(2)-x(1)), a22];
