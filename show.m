@@ -19,6 +19,8 @@ function visualizePendulum(t, theta)
     rod2 = line([x1(1) x2(1)], [y1(1) y2(1)], 'LineWidth', 2, 'Color', 'k');
     bob1 = plot(x1(1), y1(1), 'b.', 'MarkerSize', 20);
     bob2 = plot(x2(1), y2(1), 'g.', 'MarkerSize', 20);
+
+    filename = 'pendulum_animation.gif';
     
     for k = 1:length(t)
         % Update pendulum
@@ -31,10 +33,17 @@ function visualizePendulum(t, theta)
                           t(k), theta(k,1), theta(k,2)), 'Interpreter', 'latex')
         
         drawnow;
-        if false
-            if k < length(t)
-                pause(t(k+1) - t(k)); % play in real time
-            end
+        
+        frame = getframe(gcf);
+        [A, map] = rgb2ind(frame.cdata, 256);
+        delay_time = t(end)/length(t); % 10 seconds / 93 frames
+
+        if k == 1
+            imwrite(A, map, filename, 'GIF', 'LoopCount', Inf, 'DelayTime', delay_time);
+        elseif k~=length(t)
+            imwrite(A, map, filename, 'GIF', 'WriteMode', 'append', 'DelayTime', delay_time);
+        else
+            imwrite(A, map, filename, 'GIF', 'WriteMode', 'append', 'DelayTime', 2); % 2 second final pause
         end
     end
 end
