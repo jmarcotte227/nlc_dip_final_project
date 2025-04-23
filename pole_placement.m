@@ -17,7 +17,7 @@ legend('u_1', 'u_2')
 function dxdt=odefun(t,x)
     [A, F, B, C] = matrices(x);
     U = control_outer(x, A, F, B, C);
-    dxdt = [x(3); x(4); A\(C*U - F*x(3:4).^2 - B*sin(x(1:2)))];
+    dxdt = [x(3:4); A\(C*U - F*x(3:4).^2 - B*sin(x(1:2)))];
 end
 
 % Additionally save the input
@@ -46,18 +46,10 @@ function V=control_inner(x)
     persistent K % declare as static variable
     if isempty(K)
         % Pole placement
-        zeta1=0.9;
-        omega1=0.8;
-        zeta2=0.9;
-        omega2=1.2;
-
-        k1=omega1^2;
-        k2=omega2^2;
-        k3=2*zeta1*omega1;
-        k4=2*zeta2*omega2;
-        
-        K = [k1, 0, k3, 0;
-             0, k2, 0, k4];
+        A = [zeros(2), eye(2);
+             zeros(2), zeros(2)];
+        B = [zeros(2); eye(2)];
+        K = place(A, B, [-0.6 -0.8 -2 -2]);
     end
     
     V = -K*x;

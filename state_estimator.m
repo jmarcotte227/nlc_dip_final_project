@@ -1,7 +1,7 @@
 load('new.mat')
-% options = odeset('OutputFcn', @outfun,'RelTol', 1e-3, 'AbsTol', 1e-4);
-% [t,y] = ode23(@odefun, 0:0.01:5, [pi; pi; 0; 0], options);
-[t,y,u]=simulation([0, 10], [1e-1; 1e-1; 0; 0]);
+options = odeset('OutputFcn', @outfun);
+[t,y] = ode45(@odefun, [0 20], [1e-1*ones(2,1); zeros(2,1); zeros(4,1); zeros(2,1)], options);
+% [t,y,u]=simulation([0, 10], [1e-1*ones(2,1); zeros(2,1); zeros(4,1); zeros(2,1)]);
 figure(1)
 plot(t,y(:,1:2))
 xlabel('t (s)')
@@ -19,14 +19,29 @@ legend('u_1', 'u_2')
 function [t,y,u]=simulation(t,x)
     dt = 0.001;
     t = t(1):dt:t(end);
-    y = zeros(length(t),4);
+    y = zeros(length(t),length(x));
     u = zeros(length(t),2);
     y(1,:) = x;
+    persistent A_ B_ C_ K_ L_
+    if isempty(A_)
+        A_ = evalin('base', 'A_');
+        B_ = evalin('base', 'B_');
+        C_ = evalin('base', 'C_');
+        K_ = evalin('base', 'K_');
+        L_ = evalin('base', 'L_');
+    end
     for i=2:length(t)
-        [A, F, B, C] = matrices(x);
-        U = control_outer(x, A, F, B, C);
-        dxdt = [x(3); x(4); A\(C*U - F*x(3:4).^2 - B*sin(x(1:2)))];
-        x = x+dt*dxdt;
+        x_ = x(1:4); % true state
+        e_ = x(5:8); % error state
+        h_ = x_-e_; % estimated state
+        y_ = x_+[1e-3*ones(2,1); zeros(2,1)]+1e-3*randn(4,1); % measured state
+        s_ = x(9:10); % integral state
+        [Ax, Fx, Bx, Cx] = matrices(x_);
+        [Ah, Fh, Bh, Ch] = matrices(h_);
+        U = control_outer(h_, s_, Ah, Fh, Bh, Ch);
+        dxdt = [x_(3:4); Ax\(Cx*U - Fx*x_(3:4).^2 - Bx*sin(x_(1:2)))]; % true state
+        dhdt = (A_-B_*K_)*h_; % estimated state
+        x = x+dt*[dxdt; dxdt-dhdt-L_*(y_-C_*h_); h_(1:2)];
         y(i,:)=x;
         u(i,:)=U;
     end
@@ -34,10 +49,25 @@ end
 
 % Model simulation
 function dxdt=odefun(t,x)
-    [A, F, B, C] = matrices(x);
-    U = control_outer(x, A, F, B, C);
-    dxdt = [x(3); x(4); A\(C*U - F*x(3:4).^2 - B*sin(x(1:2)))];
-    t
+    persistent A_ B_ C_ K_ L_
+    if isempty(A_)
+        A_ = evalin('base', 'A_');
+        B_ = evalin('base', 'B_');
+        C_ = evalin('base', 'C_');
+        K_ = evalin('base', 'K_');
+        L_ = evalin('base', 'L_');
+    end
+    x_ = x(1:4); % true state
+    e_ = x(5:8); % error state
+    h_ = x_-e_; % estimated state
+    y_ = x_+[1e-3*ones(2,1); zeros(2,1)]+1e-6*randn(4,1); % measured state
+    s_ = x(9:10); % integral state
+    [Ax, Fx, Bx, Cx] = matrices(x_);
+    [Ah, Fh, Bh, Ch] = matrices(h_);
+    U = control_outer(h_, s_, Ah, Fh, Bh, Ch);
+    dxdt1 = [x_(3:4); Ax\(Cx*U - Fx*x_(3:4).^2 - Bx*sin(x_(1:2)))]; % true state
+    dhdt2 = (A_-B_*K_)*h_; % estimated state
+    dxdt = [dxdt1; dxdt1-dhdt2-L_(:,1:4)*(y_-C_(:,1:4)*h_); h_(1:2)];
 end
 
 % Additionally save the input
@@ -49,67 +79,36 @@ function status=outfun(t,x,flag)
     end
     if strcmp(flag, 'init')
         [A, F, B, C] = matrices(x(1:4));
-        U = control_outer(x(1:4), A, F, B, C);
+        U = control_outer(x(1:4), x(9:10), A, F, B, C);
         u = U';
     else
-        [A, F, B, C] = matrices(x);
-        U = control_outer(x, A, F, B, C);
-        u = [u; U'];
+        for i=1:4 % artifact of using ode45
+            [A, F, B, C] = matrices(x(1:4,i));
+            U = control_outer(x(1:4,i), x(9:10,i), A, F, B, C);
+            u = [u; U'];
+        end
     end
     status = 0; % return 0 to continue
 end
 
 % Decoupled second order system
-function V=control_inner(x)
-    persistent A B K L C
-    if isempty(A)
-        A = evalin('base', 'dfdx_subs');
-        B = evalin('base', 'dfdu_subs');
-        K = evalin('base', 'dudx_subs');
-    
-        % Model parameters
-        m1=1; r1=0.5; l1=1; I1=1/3*m1*l1^2;
-        m2=1; r2=0.5; l2=1; I2=1/3*m2*l2^2;
-        g = 9.81;
-        
-        a11_=I1+m2*l1^2;
-        a12_=m2*r2*l1;
-        a22_=I2;
-        b1_=(m1*r1+m2*l1)*g;
-        b2_=m2*r2*g;
-    
-        % LQR control
-        A = [0 0 1 0;
-             0 0 0 1;
-             0 0 0 0;
-             0 0 0 0];
-         
-        B = [0 0;
-             0 0;
-             1 0;
-             0 1];
-        
-        Q = diag([5, 1, 1, 1]);
-        R = diag([10, 1]);
-        K_ = lqr(A, B, Q, R);
-        k1_ = K_(1,1); k2_ = K_(1,2); k3_ = K_(1,3); k4_ = K_(1,4);
-        k5_ = K_(2,1); k6_ = K_(2,2); k7_ = K_(2,3); k8_ = K_(2,4);
-    
-        syms a11 a12 a22 b1 b2 k1 k2 k3 k4 k5 k6 k7 k8
-        A = double(subs(A, [a11; a12; a22; b1; b2], [a11_; a12_; a22_; b1_; b2_]));
-        B = double(subs(B, [a11; a12; a22], [a11_; a12_; a22_]));
-        K = double(subs(K, [a11; a12; a22; b1; b2; k1; k2; k3; k4; k5; k6; k7; k8], [a11_; a12_; a22_; b1_; b2_; k1_; k2_; k3_; k4_; k5_; k6_; k7_; k8_]));
-        L = A+diag([2,1,1,1]);
-        C = eye(4);
+function V=control_inner(x, s)
+    persistent K % declare as static variable
+    if isempty(K)
+        % Pole placement
+        A = [zeros(2), eye(2), zeros(2);
+             zeros(2), zeros(2), zeros(2);
+             eye(2), zeros(2), zeros(2)];
+        B = [zeros(2); eye(2); zeros(2)];
+        K = place(A, B, [-0.6 -0.8 -1 -1 -0.5 -0.5]);
     end
-
-    V = -K*x;
+    
+    V = -K*[x; s];
 end
 
 % Wrap the inner controller
-function U=control_outer(x, A, F, B, C)
-    x = x+1e-3*randn(4,1);
-    U=C\A*(control_inner(x) + A\(F*x(3:4).^2+B*sin(x(1:2))));
+function U=control_outer(x, s, A, F, B, C)
+    U=C\A*(control_inner(x, s) + A\(F*x(3:4).^2+B*sin(x(1:2))));
 end
 
 % Calculate matrices

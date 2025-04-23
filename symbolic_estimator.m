@@ -1,28 +1,35 @@
 % Symbolic derivation for linearized control matrices
 
-syms a11 a12 a22 b1 b2 x1 x2 x3 x4 u1 u2
-x = [x1; x2; x3; x4];
-u = [u1; u2];
+% Model parameters
+m1=1; r1=0.5; l1=1; I1=1/3*m1*l1^2;
+m2=1; r2=0.5; l2=1; I2=1/3*m2*l2^2;
+g = 9.81;
 
-A = [a11 a12*cos(x(2)-x(1));
-     a12*cos(x(2)-x(1)) a22];
+a11=I1+m2*l1^2;
+a12=m2*r2*l1;
+a22=I2;
+b1=(m1*r1+m2*l1)*g;
+b2=m2*r2*g;
+
+syms p [4 1]
+syms v [2 1]
+
+A = [a11 a12*cos(p(2)-p(1));
+     a12*cos(p(2)-p(1)) a22];
 B = [-b1 0; 0 -b2];
-F = [0 -a12*sin(x(2)-x(1));
-     a12*sin(x(2)-x(1)) 0];
+F = [0 -a12*sin(p(2)-p(1));
+     a12*sin(p(2)-p(1)) 0];
 C = [1 0; -1 1];
 
-f = [x(3); x(4); -A\(F*[x(3); x(4)]+B*[sin(x(1)); sin(x(2))])];
-g = [0; 0; A\(C*u)];
+f = [p(3:4); -A\(F*p(3:4)+B*sin(p(1:2)))];
+g = [zeros(2); A\C];
+h = f+g*v;
+dhdx = jacobian(h, p);
+dhdu = jacobian(h, v);
 
-dfdx = jacobian(f, x)+jacobian(g, x);
-dfdu = jacobian(f, u)+jacobian(g, u);
-
-dfdx_subs = subs(dfdx, x, [0; 0; 0; 0]);
-dfdu_subs = subs(dfdu, x, [0; 0; 0; 0]);
-
-syms k1 k2 k3 k4 k5 k6 k7 k8
-K = [k1 k2 k3 k4; k5 k6 k7 k8];
-u = C\(-A*K*x+F*[x(3); x(4)]+B*[sin(x(1)); sin(x(2))]);
-dudx = jacobian(u, x);
-dudx_subs = -subs(dudx, x, [0; 0; 0; 0]);
-save('new.mat', 'dfdx_subs', 'dfdu_subs', 'dudx_subs');  
+A_ = double(subs(dhdx, p, [0; 0; 0; 0]));
+B_ = double(subs(dhdu, p, [0; 0; 0; 0]));
+C_ = eye(4);
+K_ = place(A_, B_, [-0.6 -0.8 -2 -2]);
+L_ = place(A_, C_', [-0.6 -0.8 -2 -2]*5);
+save('new.mat', 'dhdx', 'dhdu', 'A_', 'B_', 'C_', 'K_', 'L_');
