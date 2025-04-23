@@ -17,7 +17,7 @@ legend('u_1', 'u_2')
 function dxdt=odefun(t,x)
     [A, F, B, C] = matrices(x);
     U = control_outer(x, A, F, B, C);
-    dxdt = [x(3); x(4); A\(C*U - F*x(3:4).^2 - B*sin(x(1:2)))];
+    dxdt = [x(3:4); A\(C*U - F*x(3:4).^2 - B*sin(x(1:2)))];
 end
 
 % Additionally save the input
@@ -46,21 +46,14 @@ function V=control_inner(x)
     persistent K % declare as static variable
     if isempty(K)
         % LQR control
-        A = [0 0 1 0;
-             0 0 0 1;
-             0 0 0 0;
-             0 0 0 0];
-         
-        B = [0 0;
-             0 0;
-             1 0;
-             0 1];
-        
+        A = [zeros(2), eye(2);
+             zeros(2), zeros(2)];
+        B = [zeros(2); eye(2)];
         Q = diag([5, 1, 1, 1]);
-        R = diag([10, 1]);
+        R = diag([20, 1]);
         K = lqr(A, B, Q, R);
     end
-    
+
     V = -K*x;
 end
 
