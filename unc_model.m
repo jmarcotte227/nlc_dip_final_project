@@ -1,19 +1,24 @@
-global Df_1
+% symbolic derivation of the gradient of the squared error
+global Df_1 
 global Df_2
-global hm1
-global hm2
-global sx
-global sx_prev
-global sdt
-global sU
-syms hm1 hm2 sdt
+global hm1 % estimated mass
+global hm2 % estimated mass
+global sx % symbolic state
+global sx_prev % symbolic state of the previous timestep
+global sdt % symbolic timestep size
+global sU % symbolic input
+syms hm1 hm2 sdt 
 sx = sym("x", [6 1]);
 sx_prev = sym("hx_prev", [6 1]);
 sU = sym("U", [2 1]);
 est_e = f_m(sx, sx_prev, sdt, sU, hm1, hm2);
 
-Df_1 = diff(est_e'*est_e,hm1)
-Df_2 = diff(est_e'*est_e,hm2)
+% symbolic gradient of the squared error
+Df_1 = diff(est_e'*est_e,hm1);
+Df_2 = diff(est_e'*est_e,hm2);
+pretty(Df_1)
+pretty(Df_2)
+%%
 
 
 
