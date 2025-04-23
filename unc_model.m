@@ -2,17 +2,18 @@ global Df_1
 global Df_2
 global hm1
 global hm2
-global sdxdt
 global sx
+global sx_prev
+global sdt
 global sU
-
-syms hm1 hm2 
-sdxdt = sym("dx", [6 1]);
-sx = sym("x", [8 1]);
+syms hm1 hm2 sdt
+sx = sym("x", [6 1]);
+sx_prev = sym("hx_prev", [6 1]);
 sU = sym("U", [2 1]);
-est_e = f_m(sx, sdxdt, sU, hm1, hm2);
-Df_1 = diff(est_e'*est_e,hm1);
-Df_2 = diff(est_e'*est_e,hm2);
+est_e = f_m(sx, sx_prev, sdt, sU, hm1, hm2);
+
+Df_1 = diff(est_e'*est_e,hm1)
+Df_2 = diff(est_e'*est_e,hm2)
 
 
 
@@ -20,21 +21,25 @@ Df_2 = diff(est_e'*est_e,hm2);
 function [t,y,u]=simulation(t,x)
     dt = 0.01;
     t = t(1):dt:t(end);
-    y = zeros(length(t),8);
+    y = zeros(length(t),6);
     u = zeros(length(t),2);
     y(1,:) = x;
     for i=2:length(t)
-        global Df_0
+        x_prev = x;
         global Df_1
-        global hm0
+        global Df_2
         global hm1
-        global sdxdt
+        global hm2
         global sx
+        global sx_prev
+        global sdt
         global sU
         % actual dynamics
         m1 = 1;
         m2 = 1;
-        p=0.001;
+        p1 = 20;
+        p2 = 10;
+
         [A, F, B, C] = matrices(x, m1, m2);
         % uncertain dynamics
         % uncertain mass
@@ -51,29 +56,34 @@ function [t,y,u]=simulation(t,x)
     
         rhs = C*U - F*[x(3)^2; x(4)^2] - B*[sin(x(1)); sin(x(2))];
         accel = A\rhs;
-        dxdt = [x(3); x(4); accel(1); accel(2); 0; 0];
+        dxdt = [x(3); x(4); accel(1); accel(2)];
         
+        % dxdt = [x(3); x(4); accel(1); accel(2); 0; 0
+        x(1:4) = x(1:4)+dt*dxdt;
+
         % substitute 
-        grad_m1 = subs(Df_1, [hm1, hm2], [hat_m1, hat_m2]);
-        grad_m1 = subs(grad_m1, [sdxdt, sx], [dxdt, x]);
+        grad_m1 = subs(Df_1, [hm1, hm2, sdt], [hat_m1, hat_m2, dt]);
+        grad_m1 = subs(grad_m1, [sx, sx_prev], [x, x_prev]);
         grad_m1 = subs(grad_m1, sU, U);
-        grad_m2 = subs(Df_2, [hm1, hm2], [hat_m1, hat_m2]);
-        grad_m2 = subs(grad_m2, [sdxdt, sx], [dxdt, x]);
+        grad_m2 = subs(Df_2, [hm1, hm2, sdt], [hat_m1, hat_m2, dt]);
+        grad_m2 = subs(grad_m2, [sx, sx_prev], [x, x_prev]);
         grad_m2 = subs(grad_m2, sU, U);
 
-    % update parameters
-        dxdt(7) = p*grad_m1;
-        dxdt(8) = p*grad_m2;
-        % dxdt = [x(3); x(4); accel(1); accel(2); 0; 0
-        x = x+dt*dxdt;
+        % update parameters
+        dmdt_1 = p1*grad_m1;
+        dmdt_2 = p2*grad_m2;
+        x(5) = x(5)-dt*dmdt_1;
+        x(6) = x(6)-dt*dmdt_2;
+
         y(i,:) = x;
         u(i,:) = U;
         disp(t(i))
+        disp(x(5:6))
     end
 end 
 % options = odeset('OutputFcn', @outfun);
 % [t,y] = ode45(@odefun, [0, 5], [-pi; -pi; 0; 0; 1; 1]);
-[t, y, u] = simulation([0, 5], [-pi; -pi; 0; 0; 1.1; 1.1]);
+[t, y, u] = simulation([0, 20], [pi; pi; 0; 0; 0.8; 0.8]);
 figure(1)
 plot(t,y(:,1:2))
 xlabel('t (s)')
@@ -93,7 +103,7 @@ plot(t,y(:,5:6))
 xlabel('t (s)')
 ylabel('m (kg)')
 title('Parameter update')
-legend('b_1', 'b_2')
+legend('m_1', 'm_2')
 
 % Model simulation
 % function dxdt=odefun(t,x)
@@ -142,13 +152,14 @@ legend('b_1', 'b_2')
 % end
 
 % compute the error between the estimated and real system
-function est_e = f_m(dt,x,dxdt, U, hm1, hm2)
+function est_e = f_m(x, x_prev, dt, U, hm1, hm2)
     % compute estimated dynamics
-    [hA, hF, hB, hC] = matrices(x, hm1, hm2);
-    rhs = hC*U - hF*[x(3)^2; x(4)^2] - hB*[sin(x(1)); sin(x(2))];
+    [hA, hF, hB, hC] = matrices(x_prev, hm1, hm2);
+    rhs = hC*U - hF*[x_prev(3)^2; x_prev(4)^2] - hB*[sin(x_prev(1)); sin(x_prev(2))];
     accel = hA\rhs;
-    dhxdt = [x(3); x(4); accel(1); accel(2); -x(1); -x(2)];
-    est_e = (x+(dt*dxdt)) - (x_hat)dhxdt;
+    dhxdt = [x_prev(3); x_prev(4); accel(1); accel(2); -x_prev(1); -x_prev(2)];
+    hy = x_prev(3:4)+dt*dhxdt(3:4);
+    est_e = x(3:4) - hy;
 end
 % Additionally save the input
 % function status=outfun(t,x,flag)
@@ -194,8 +205,8 @@ end
 % Passivity-Based control
 function U=passive_control(x, C, B)
     % gains
-    K1 = 2*eye(2);
-    K2 = 2*eye(2);
+    K1 = 1*eye(2);
+    K2 = 1*eye(2);
     U=C\(B*[sin(x(1)); sin(x(2))]-K1*[x(1);x(2)]-K2*[x(3);x(4)]);
 end
 % Passivity-Based control with integrator

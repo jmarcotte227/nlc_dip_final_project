@@ -62,12 +62,13 @@ b1 = (m1*r1+m2*l1)*g;
 b2 = m2*r2*g;
 a22 =1/3*m2*l2^2; 
 ddt = inv(A)*(C*u-F*[x3^2;x4^2]-B*[sin(x1);sin(x2)]-D*[x3;x4]);
-% unc_dynamics = subs((A*[ddt1;ddt2]+F*[x3^2;x4^2]+B*[sin(x1);sin(x2)]));
+unc_dynamics = subs((A*[ddt1;ddt2]+F*[x3^2;x4^2]+B*[sin(x1);sin(x2)]));
 
-unc_dynamics = subs(ddt);
+%unc_dynamics = subs(ddt);
 % linear parameterization of the dynamics wrt mass
 disp("Linear parameterization")
-pretty(collect(simplify(unc_dynamics),[m1 m2]))
+pretty(simplify(collect(unc_dynamics,[m1,m2])))
+%pretty(simplify(collect(subs(unc_dynamics,[l1, l2, r1,r2, g, x1, x2, x3, x4],[1, 1, 0.5, 0.5, 9.81, 1, 1, 1, 1]), [m1,m2])))
 
 
 %% junk
